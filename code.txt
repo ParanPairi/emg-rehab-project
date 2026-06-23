@@ -1,0 +1,7 @@
+python3 -c "
+import serial
+ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)
+for i in range(10):
+    line = ser.readline().decode(errors='ignore').strip()
+    print(repr(line))
+"

@@ -1,0 +1,27 @@
+import seri
+import time
+
+SERIAL_PORT = "/dev/ttyACM0"   # 안 되면 /dev/ttyUSB0 로 바꾸기
+BAUD_RATE = 115200
+
+ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+time.sleep(2)  # Arduino 리셋 대기
+
+print("Arduino EMG reading start... Ctrl+C to stop")
+
+while True:
+    try:
+        line = ser.readline().decode("utf-8", errors="ignore").strip()
+
+        if line:
+            emg_value = int(line)
+            print("EMG:", emg_value)
+
+    except ValueError:
+        pass
+    except KeyboardInterrupt:
+        print("stop")
+        break
+
+ser.close()
+
