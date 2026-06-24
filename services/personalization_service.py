@@ -15,7 +15,7 @@ from services.firebase_service import (
     get_personal_training_count,
     update_personal_model_status,
 )
-from services.cnn_model_service import loaded_user_models
+from services.cnn_model_service import clear_user_model_cache
 
 SCALER_RAW_PATH = "model/scaler_raw_5ch_env.pkl"
 SCALER_FEAT_PATH = "model/scaler_feat_5ch_env.pkl"
@@ -30,11 +30,6 @@ MIN_SAMPLES_FOR_VAL_SPLIT = len(GESTURE_LABELS) * 5
 
 REQUIRED_DATA_COUNT = 120
 USER_MODEL_DIR = "models/users"
-
-
-def clear_user_model_cache(user_id: str):
-    if user_id in loaded_user_models:
-        del loaded_user_models[user_id]
 
 
 def check_and_train_personal_model(user_id: str):

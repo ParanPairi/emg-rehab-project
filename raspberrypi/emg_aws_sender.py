@@ -100,6 +100,15 @@ async def emg_sender_loop():
             ) as emg_ws:
                 print("EMG WebSocket connected")
 
+                async def drain_server_responses():
+                    try:
+                        async for _ in emg_ws:
+                            pass
+                    except Exception:
+                        pass
+
+                asyncio.ensure_future(drain_server_responses())
+
                 last_sent_time = 0.0
 
                 while True:

@@ -9,21 +9,12 @@ from sklearn.model_selection import train_test_split
 
 from firebase_admin import storage, firestore
 
-from core.config import CNN_MODEL_PATH
+from core.config import CNN_MODEL_PATH, GESTURE_LABELS
 from core.firebase import firestore_db
 from services.cnn_model_service import clear_user_model_cache
 
 USER_MODELS_DIR = "models/users"
 os.makedirs(USER_MODELS_DIR, exist_ok=True)
-
-GESTURE_LABELS = [
-    "Rest",
-    "Fist",
-    "Wrist Flexion",
-    "Wrist Extension",
-    "Radial Deviation",
-    "Ulnar Deviation",
-]
 
 VAL_SPLIT_RATIO = 0.2
 EARLY_STOP_PATIENCE = 3
