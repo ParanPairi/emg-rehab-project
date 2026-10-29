@@ -9,8 +9,8 @@ BAUD_RATE = 115200
 
 DEVICE_ID = "pi1"
 
-AWS_EMG_WS_URL = "ws://52.78.30.13:8001/ws/emg"
-AWS_DEVICE_WS_URL = f"ws://52.78.30.13:8001/ws/device/{DEVICE_ID}"
+AWS_EMG_WS_URL = "ws://52.78.30.13:8000/ws/emg"
+AWS_DEVICE_WS_URL = f"ws://52.78.30.13:8000/ws/device/{DEVICE_ID}"
 
 measuring = False
 prev_measuring = False

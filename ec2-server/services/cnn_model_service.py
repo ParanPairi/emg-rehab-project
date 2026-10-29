@@ -4,12 +4,13 @@ import joblib
 from tensorflow.keras.models import load_model
 
 from core.config import (
-    CNN_MODEL_PATH,
+    CNN_MODEL_PATH,  # ⚠️ 주의: 이 경로에 있는 모델도 4채널(50x4)용 모델이어야 합니다.
     GESTURE_LABELS,
 )
 
-SCALER_RAW_PATH = "model/scaler_raw_5ch_env.pkl"
-SCALER_FEAT_PATH = "model/scaler_feat_5ch_env.pkl"
+# 1️⃣ 4채널용 스케일러 파일 경로로 수정
+SCALER_RAW_PATH = "/home/ubuntu/capstone_ai/model/scaler_raw_4ch_env.pkl"
+SCALER_FEAT_PATH = "/home/ubuntu/capstone_ai/model/scaler_feat_4ch_env.pkl"
 
 loaded_user_models = {}
 
@@ -49,25 +50,34 @@ def _preprocess_window(raw_window: np.ndarray):
     """
     캘리브레이션과 동일한 전처리 파이프라인:
     1. 베이스라인 영점 조절 (최솟값을 0으로 clip)
-    2. 특징 추출 (RMS, MAV, max, var) → (4 × CHANNEL_COUNT,) 벡터
+    2. 특징 추출 (RMS, MAV, max, var) → (4종류 × 4채널) = 16차원 벡터
     3. 스케일러 적용
     반환: (x_raw_scaled, x_feat_scaled)
     """
+    # 🚨 [시니어 팁] 입력 데이터가 정확히 4채널인지 방어하는 로직 추가
+    n_channels = raw_window.shape[1]
+    if n_channels != 4:
+        raise ValueError(f"입력 데이터 채널 에러: 4채널 데이터를 기대했으나, {n_channels}채널이 입력되었습니다. 형태: {raw_window.shape}")
+
     # 1) 베이스라인 영점 조절
     baseline = np.min(raw_window, axis=0)
     adj_window = np.clip(raw_window - baseline, a_min=0, a_max=None)
 
-    # 2) 특징 추출
+    # 2) 특징 추출 (4채널에 대해 연산하므로 각각 사이즈가 4가 됨)
     rms = np.sqrt(np.mean(adj_window ** 2, axis=0))
     mav = np.mean(np.abs(adj_window), axis=0)
     max_val = np.max(adj_window, axis=0)
     var_val = np.var(adj_window, axis=0)
-    features = np.concatenate([rms, mav, max_val, var_val])  # (20,)
+    
+    # 2️⃣ 기존 (20,) 벡터에서 4채널에 맞춰 (16,) 차원 벡터로 결합됨
+    features = np.concatenate([rms, mav, max_val, var_val])  # (16,)
 
     # 3) 스케일러 적용
     scaler_raw, scaler_feat = _get_scalers()
-    n_channels = adj_window.shape[1]
+    
+    # 원시 데이터(raw) 스케일링
     x_raw_scaled = scaler_raw.transform(adj_window.reshape(-1, n_channels)).reshape(adj_window.shape)
+    # 특징 데이터(feat) 스케일링
     x_feat_scaled = scaler_feat.transform(features.reshape(1, -1))[0]
 
     return x_raw_scaled, x_feat_scaled
@@ -82,12 +92,7 @@ def _to_probability_array(model_output) -> np.ndarray:
         probs = exp_values / np.sum(exp_values)
     return probs
 
-
 def predict_gesture_with_cnn(raw_window: np.ndarray, user_id: str = "default") -> dict:
-    """
-    raw_window expected shape: (WINDOW_SIZE, CHANNEL_COUNT)
-    캘리브레이션과 동일한 전처리 후 하이브리드 이중 입력 모델로 예측합니다.
-    """
     input_data = raw_window.astype("float32")
 
     raw_min = float(np.min(input_data))
@@ -95,26 +100,24 @@ def predict_gesture_with_cnn(raw_window: np.ndarray, user_id: str = "default") -
     raw_mean = float(np.mean(input_data))
     raw_std = float(np.std(input_data))
 
-    # 캘리브레이션과 동일한 전처리
     x_raw_scaled, x_feat_scaled = _preprocess_window(input_data)
 
-    # 배치 차원 추가
-    x_raw_input = np.expand_dims(x_raw_scaled, axis=0)   # (1, 25, 5)
-    x_feat_input = np.expand_dims(x_feat_scaled, axis=0) # (1, 20)
+    x_raw_input = np.expand_dims(x_raw_scaled, axis=0)
+    x_feat_input = np.expand_dims(x_feat_scaled, axis=0)
 
     current_model = get_user_model(user_id)
     model_input_shape = current_model.input_shape
 
-    model_output = current_model.predict([x_raw_input, x_feat_input], verbose=0)
-    raw_model_output = np.array(model_output, dtype=float)
+    # ⭐ predict() 대신 직접 호출 (실시간 단건 추론에 훨씬 빠름)
+    model_output = current_model([x_raw_input, x_feat_input], training=False).numpy()
 
+    raw_model_output = np.array(model_output, dtype=float)
     if raw_model_output.ndim > 1:
         raw_model_output_flat = raw_model_output[0].tolist()
     else:
         raw_model_output_flat = raw_model_output.tolist()
 
     probs = _to_probability_array(model_output)
-
     best_idx = int(np.argmax(probs))
 
     if best_idx >= len(GESTURE_LABELS):
@@ -135,10 +138,8 @@ def predict_gesture_with_cnn(raw_window: np.ndarray, user_id: str = "default") -
         "actualInputShape": [list(x_raw_input.shape), list(x_feat_input.shape)],
         "user_id": user_id,
         "debug": {
-            "rawMin": raw_min,
-            "rawMax": raw_max,
-            "rawMean": raw_mean,
-            "rawStd": raw_std,
+            "rawMin": raw_min, "rawMax": raw_max,
+            "rawMean": raw_mean, "rawStd": raw_std,
         }
     }
 

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+import asyncio
 import time
 
 router = APIRouter()
@@ -22,15 +23,28 @@ async def device_websocket(websocket: WebSocket, device_id: str):
 
     try:
         while True:
-            data = await websocket.receive_json()
-            print(f"[{device_id}] 상태 수신:", data)
+            # 30초까지 메시지가 없어도 연결을 끊지 않고 계속 대기
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_json(), timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                continue
 
+            print(f"[{device_id}] 상태 수신:", data)
             device_status[device_id]["last_seen"] = time.time()
 
             if data.get("type") == "status":
                 device_status[device_id]["measuring"] = bool(
                     data.get("measuring", False)
                 )
+                if "mode" in data:
+                    device_status[device_id]["mode"] = data.get("mode")
+                # 응답을 돌려줘 양방향 통신 유지 (연결 안정화)
+                try:
+                    await websocket.send_json({"type": "ack"})
+                except Exception:
+                    pass
 
     except WebSocketDisconnect:
         print(f"라즈베리 연결 끊김: {device_id}")
@@ -48,7 +62,11 @@ async def device_websocket(websocket: WebSocket, device_id: str):
 
 
 @router.post("/device/start/{device_id}")
-async def start_device(device_id: str):
+async def start_device(
+    device_id: str,
+    mode: str = "training",
+    user_id: str | None = None,
+):
     ws = device_clients.get(device_id)
 
     if ws is None:
@@ -60,7 +78,9 @@ async def start_device(device_id: str):
     try:
         await ws.send_json({
             "type": "start",
+            "mode": mode,               # training 또는 calibration
             "device_id": device_id,
+            "user_id": user_id,
         })
     except Exception:
         device_clients.pop(device_id, None)
@@ -69,7 +89,6 @@ async def start_device(device_id: str):
             "measuring": False,
             "last_seen": time.time(),
         }
-
         raise HTTPException(
             status_code=404,
             detail="라즈베리 연결이 끊겨 있습니다. 라즈베리 코드를 다시 실행하세요.",
@@ -78,12 +97,14 @@ async def start_device(device_id: str):
     device_status.setdefault(device_id, {})
     device_status[device_id]["connected"] = True
     device_status[device_id]["measuring"] = True
+    device_status[device_id]["mode"] = mode
     device_status[device_id]["last_seen"] = time.time()
 
     return {
         "success": True,
-        "message": "측정 시작 명령 전송 완료",
+        "message": f"{mode} 시작 명령 전송 완료",
         "device_id": device_id,
+        "mode": mode,
     }
 
 
@@ -109,7 +130,6 @@ async def stop_device(device_id: str):
             "measuring": False,
             "last_seen": time.time(),
         }
-
         raise HTTPException(
             status_code=404,
             detail="라즈베리 연결이 끊겨 있습니다. 라즈베리 코드를 다시 실행하세요.",

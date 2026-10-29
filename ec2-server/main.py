@@ -9,6 +9,7 @@ from routers.prescription_router import router as prescription_router
 from routers.tts_router import router as tts_router
 from routers.calibration_router import router as calibration_router
 from routers.device_router import router as device_router
+from routers.training_router import router as training_router
 
 
 app = FastAPI(title="EMGHAB CNN AI Server")
@@ -29,6 +30,7 @@ app.include_router(tts_router)
 app.include_router(calibration_router)
 app.include_router(emg_ws_router)
 app.include_router(device_router)
+app.include_router(training_router)
 
 print("DEVICE ROUTER LOADED")
 

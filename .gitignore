@@ -4,3 +4,17 @@ serviceAccountKey.json
 __pycache__/
 *.pyc
 venv/
+secrets/
+*.json.key
+firebase-service-account.json
+tf_env/
+models/users/
+*.csv
+secrets/
+.env
+tf_env/
+**/models/users/
+*.db
+*.mp3
+.vscode/
+*.csv
